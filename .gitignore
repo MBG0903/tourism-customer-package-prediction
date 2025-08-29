@@ -1,0 +1,10 @@
+# Colab / local junk
+.config/
+sample_data/
+__pycache__/
+*.ipynb_checkpoints/
+
+# Training artifacts
+mlruns/
+exported_model*/
+tourism_project/data/
