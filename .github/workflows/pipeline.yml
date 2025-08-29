@@ -8,7 +8,7 @@ on:
     branches: [ "main" ]
   workflow_dispatch: {}
   schedule:
-    - cron: "0 3 * * 1"   # optional weekly retrain (Mon 03:00 UTC)
+    - cron: "0 3 * * 1"
 
 permissions:
   contents: write
@@ -21,10 +21,10 @@ concurrency:
 env:
   PYTHON_VERSION: "3.10"
   HF_USERNAME: ${{ secrets.HF_USERNAME }}
-  HF_TOKEN: ${{ secrets.HF_TOKEN }}
-  DATASET_REPO: ${{ secrets.DATASET_REPO }}   # e.g. MBG0903/tourism-customer-data
-  MODEL_REPO: ${{ secrets.MODEL_REPO }}       # e.g. MBG0903/tourism_customer_xgb
-  SPACE_ID:   ${{ secrets.SPACE_ID }}         # e.g. MBG0903/tourism-prediction-app (optional)
+  HF_TOKEN:    ${{ secrets.HF_TOKEN }}
+  DATASET_REPO:${{ secrets.DATASET_REPO }}
+  MODEL_REPO:  ${{ secrets.MODEL_REPO }}
+  SPACE_ID:    ${{ secrets.SPACE_ID }}
 
 jobs:
   train-register-deploy:
@@ -45,7 +45,7 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-pip-${{ env.VERSION }}-
 
       - name: Install dependencies
         run: |
@@ -57,12 +57,20 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Verify required secrets present
+        run: |
+          test -n "${{ secrets.HF_USERNAME }}" || (echo "HF_USERNAME missing" && exit 1)
+          test -n "${{ secrets.HF_TOKEN }}"    || (echo "HF_TOKEN missing" && exit 1)
+          test -n "${{ secrets.DATASET_REPO }}"|| (echo "DATASET_REPO missing" && exit 1)
+          test -n "${{ secrets.MODEL_REPO }}"  || (echo "MODEL_REPO missing" && exit 1)
+          echo "Secrets present."
+
       - name: Train, Evaluate, Register model on HF Hub
         env:
-          HF_TOKEN:    ${{ secrets.HF_TOKEN }}
-          HF_USERNAME: ${{ secrets.HF_USERNAME }}
-          DATASET_REPO:${{ secrets.DATASET_REPO }}
-          MODEL_REPO:  ${{ secrets.MODEL_REPO }}
+          HF_TOKEN:     ${{ secrets.HF_TOKEN }}
+          HF_USERNAME:  ${{ secrets.HF_USERNAME }}
+          DATASET_REPO: ${{ secrets.DATASET_REPO }}
+          MODEL_REPO:   ${{ secrets.MODEL_REPO }}
         run: |
           python - <<'PY'
           import os, json, datetime, pathlib, joblib
@@ -81,7 +89,6 @@ jobs:
           DATASET_REPO= os.environ["DATASET_REPO"]
           MODEL_REPO  = os.environ["MODEL_REPO"]
 
-          # 1) Load HF splits
           ds = load_dataset("csv", data_files={
               "train": f"hf://datasets/{DATASET_REPO}/data/train.csv",
               "test":  f"hf://datasets/{DATASET_REPO}/data/test.csv",
@@ -108,7 +115,6 @@ jobs:
               ]), cat)
           ])
 
-          # 2) Train (fixed prod-style params)
           model = xgb.XGBClassifier(
               objective="binary:logistic", eval_metric="logloss",
               n_estimators=400, learning_rate=0.1, max_depth=6,
@@ -118,7 +124,6 @@ jobs:
           pipe = Pipeline([("prep", prep), ("clf", model)])
           pipe.fit(Xtr, ytr)
 
-          # 3) Evaluate
           proba = pipe.predict_proba(Xte)[:,1]
           pred  = (proba >= 0.5).astype(int)
           metrics = {
@@ -131,13 +136,11 @@ jobs:
           }
           print("Metrics:", metrics)
 
-          # 4) Save artifacts
           out = pathlib.Path("export_model"); out.mkdir(exist_ok=True)
           joblib.dump(pipe, out / "model.joblib")
           with open(out / "metadata.json", "w") as f:
               json.dump({"metrics":metrics, "created":str(datetime.datetime.utcnow())}, f, indent=2)
 
-          # 5) Push to HF Model Hub
           api = HfApi(token=HF_TOKEN)
           try:
               create_repo(repo_id=MODEL_REPO, repo_type="model", private=True, token=HF_TOKEN)
@@ -146,12 +149,11 @@ jobs:
           upload_folder(folder_path=str(out), repo_id=MODEL_REPO, repo_type="model", token=HF_TOKEN)
           print("Uploaded model:", f"https://huggingface.co/{MODEL_REPO}")
 
-          # 6) Write summary to commit back to main
           with open("metrics_summary.json","w") as f:
               json.dump({"model_repo": MODEL_REPO, **metrics}, f, indent=2)
           PY
 
-      - name: Upload artifacts to Actions
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: model-and-metrics
@@ -159,7 +161,7 @@ jobs:
             export_model/
             metrics_summary.json
 
-      - name: (Optional) Redeploy HF Space with latest app files
+      - name: (Optional) Redeploy HF Space
         if: ${{ env.SPACE_ID != '' }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -170,7 +172,7 @@ jobs:
           from huggingface_hub import HfApi
           api = HfApi(token=os.environ["HF_TOKEN"])
           api.upload_folder(
-              folder_path="tourism_project/deployment",   # app.py, requirements.txt, Dockerfile
+              folder_path="tourism_project/deployment",
               repo_id=os.environ["SPACE_ID"],
               repo_type="space",
               commit_message="Auto-deploy from GitHub Actions"
