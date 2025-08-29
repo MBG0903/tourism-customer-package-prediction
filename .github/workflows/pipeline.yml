@@ -67,6 +67,7 @@ jobs:
 
       - name: Train, Evaluate, Register model on HF Hub
         env:
+          PYTHON_VERSION: "3.10"
           HF_TOKEN:     ${{ secrets.HF_TOKEN }}
           HF_USERNAME:  ${{ secrets.HF_USERNAME }}
           DATASET_REPO: ${{ secrets.DATASET_REPO }}
@@ -86,7 +87,7 @@ jobs:
 
           HF_USERNAME = os.environ["HF_USERNAME"]
           HF_TOKEN    = os.environ["HF_TOKEN"]
-          DATASET_REPO= os.environ["DATASET_REPO"]
+          DATASET_REPO = os.environ["DATASET_REPO"]
           MODEL_REPO  = os.environ["MODEL_REPO"]
 
           ds = load_dataset("csv", data_files={
