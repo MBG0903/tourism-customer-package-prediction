@@ -22,7 +22,7 @@ env:
   PYTHON_VERSION: "3.10"
   HF_USERNAME: ${{ secrets.HF_USERNAME }}
   HF_TOKEN:    ${{ secrets.HF_TOKEN }}
-  DATASET_REPO: ${{ secrets.DATASET_REPO }}
+  DATASET_REPO:${{ secrets.DATASET_REPO }}
   MODEL_REPO:  ${{ secrets.MODEL_REPO }}
   SPACE_ID:    ${{ secrets.SPACE_ID }}
 
