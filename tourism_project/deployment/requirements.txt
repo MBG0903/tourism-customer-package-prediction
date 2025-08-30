@@ -1,7 +1,5 @@
+streamlit>=1.33
 pandas
-numpy
 scikit-learn
-xgboost
 joblib
-huggingface_hub
-streamlit
+huggingface_hub>=0.23
