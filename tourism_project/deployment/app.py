@@ -4,7 +4,7 @@ import streamlit as st
 from huggingface_hub import hf_hub_download
 
 st.set_page_config(page_title="Wellness Package Predictor", page_icon="🏝️", layout="centered")
-st.title("🏝️ Wellness Tourism Package — Purchase Propensity")
+st.title("🏝️ Wellness Tourism Package : Purchase Propensity")
 
 MODEL_REPO = os.getenv("MODEL_REPO", "MBG0903/tourism_customer_xgb")
 HF_TOKEN = os.getenv("HF_TOKEN", None)
